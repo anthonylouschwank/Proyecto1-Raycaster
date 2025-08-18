@@ -9,12 +9,11 @@ const float FOV = 60.0f * DEG2RAD; // Campo de vision en radianes
 const float BLOCK_SIZE = 64.0f; // Tamaño de cada bloque del mapa
 const int NUM_RAYS = SCREEN_WIDTH;
 
-// Mapa con diferentes tipos de paredes
 int worldMap[MAP_HEIGHT][MAP_WIDTH] = {
     {1,1,1,1,1,1,1,1},
     {1,0,0,0,0,0,0,1},
     {1,0,2,0,0,3,0,1},
-    {1,0,0,0,0,0,0,1},
+    {1,0,0,0,4,0,0,1}, // 4 = cubo morado (objetivo)
     {1,0,2,0,0,3,0,1},
     {1,0,0,0,0,0,0,1},
     {1,0,0,0,0,0,0,1},
@@ -24,6 +23,7 @@ int worldMap[MAP_HEIGHT][MAP_WIDTH] = {
 struct Player {
     float x, y;        
     float angle;       
+    bool hasWon;       
 };
 
 // Funcion para verificar si una posicion esta dentro del mapa
@@ -60,8 +60,11 @@ Intersect CastRay(float startX, float startY, float angle, float blockSize, bool
             return {d, '1'}; // Fuera del mapa = pared
         }
         
-        // Verificar si hay pared
         if (worldMap[j][i] != 0) {
+            // Si es el cubo morado (4), no es solido para los rayos pero si visible
+            if (worldMap[j][i] == 4) {
+                return {d, (char)('0' + worldMap[j][i])};
+            }
             return {d, (char)('0' + worldMap[j][i])};
         }
         
@@ -77,33 +80,51 @@ int main() {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Raycaster Simple");
     SetTargetFPS(60);
     
-    Player player = {BLOCK_SIZE * 4, BLOCK_SIZE * 4, 0.0f}; // Posicion inicial 
+    Player player = {BLOCK_SIZE * 4, BLOCK_SIZE * 4, 0.0f, false}; // Posicion inicial con estado de victoria
     
     while (!WindowShouldClose()) {
-        // Controles del jugador
-        float moveSpeed = 3.0f;
-        if (IsKeyDown(KEY_W)) {
-            float newX = player.x + cosf(player.angle) * moveSpeed;
-            float newY = player.y + sinf(player.angle) * moveSpeed;
-            int mapX = (int)(newX / BLOCK_SIZE);
-            int mapY = (int)(newY / BLOCK_SIZE);
-            if (mapX >= 0 && mapX < MAP_WIDTH && mapY >= 0 && mapY < MAP_HEIGHT && worldMap[mapY][mapX] == 0) {
-                player.x = newX;
-                player.y = newY;
+        // Controles del jugador (solo si no ha ganado)
+        if (!player.hasWon) {
+            float moveSpeed = 3.0f;
+            if (IsKeyDown(KEY_W)) {
+                float newX = player.x + cosf(player.angle) * moveSpeed;
+                float newY = player.y + sinf(player.angle) * moveSpeed;
+                int mapX = (int)(newX / BLOCK_SIZE);
+                int mapY = (int)(newY / BLOCK_SIZE);
+                if (mapX >= 0 && mapX < MAP_WIDTH && mapY >= 0 && mapY < MAP_HEIGHT) {
+                    // Verificar si recogio el cubo morado
+                    if (worldMap[mapY][mapX] == 4) {
+                        worldMap[mapY][mapX] = 0; // Remover el cubo del mapa
+                        player.hasWon = true;     // Activar estado de victoria
+                    }
+                    // Solo moverse si no es una pared solida (1, 2, 3)
+                    if (worldMap[mapY][mapX] == 0) {
+                        player.x = newX;
+                        player.y = newY;
+                    }
+                }
             }
-        }
-        if (IsKeyDown(KEY_S)) {
-            float newX = player.x - cosf(player.angle) * moveSpeed;
-            float newY = player.y - sinf(player.angle) * moveSpeed;
-            int mapX = (int)(newX / BLOCK_SIZE);
-            int mapY = (int)(newY / BLOCK_SIZE);
-            if (mapX >= 0 && mapX < MAP_WIDTH && mapY >= 0 && mapY < MAP_HEIGHT && worldMap[mapY][mapX] == 0) {
-                player.x = newX;
-                player.y = newY;
+            if (IsKeyDown(KEY_S)) {
+                float newX = player.x - cosf(player.angle) * moveSpeed;
+                float newY = player.y - sinf(player.angle) * moveSpeed;
+                int mapX = (int)(newX / BLOCK_SIZE);
+                int mapY = (int)(newY / BLOCK_SIZE);
+                if (mapX >= 0 && mapX < MAP_WIDTH && mapY >= 0 && mapY < MAP_HEIGHT) {
+                    // Verificar si recogio el cubo morado
+                    if (worldMap[mapY][mapX] == 4) {
+                        worldMap[mapY][mapX] = 0; // Remover el cubo del mapa
+                        player.hasWon = true;     // Activar estado de victoria
+                    }
+                    // Solo moverse si no es una pared solida (1, 2, 3)
+                    if (worldMap[mapY][mapX] == 0) {
+                        player.x = newX;
+                        player.y = newY;
+                    }
+                }
             }
+            if (IsKeyDown(KEY_A)) player.angle -= 0.05f;
+            if (IsKeyDown(KEY_D)) player.angle += 0.05f;
         }
-        if (IsKeyDown(KEY_A)) player.angle -= 0.05f;
-        if (IsKeyDown(KEY_D)) player.angle += 0.05f;
         
         BeginDrawing();
         ClearBackground(BLACK);
@@ -113,7 +134,7 @@ int main() {
             // Calcular angulo del rayo
             float rayAngle = player.angle - FOV/2 + (FOV * x / NUM_RAYS);
             
-            // Lanzar rayo
+            // Lanzar rayo con el nuevo algoritmo
             Intersect hit = CastRay(player.x, player.y, rayAngle, BLOCK_SIZE, false);
             float correctedDistance = hit.distance * cosf(rayAngle - player.angle);
             
@@ -130,6 +151,7 @@ int main() {
                 case '1': wallColor = RED; break;      // Paredes normales
                 case '2': wallColor = BLUE; break;     // Paredes especiales
                 case '3': wallColor = GREEN; break;    // Otras paredes
+                case '4': wallColor = PURPLE; break;   // Cubo morado (objetivo)
                 default: wallColor = WHITE; break;
             }
             
@@ -152,6 +174,7 @@ int main() {
                     case 1: color = WHITE; break;    // Pared normal
                     case 2: color = BLUE; break;     // Pared especial
                     case 3: color = GREEN; break;    // Otra pared
+                    case 4: color = PURPLE; break;   // Cubo morado (objetivo)
                     default: color = GRAY; break;
                 }
                 DrawRectangle(x * mapScale/MAP_WIDTH, y * mapScale/MAP_HEIGHT, 
@@ -169,8 +192,76 @@ int main() {
         int dirY = playerMapY + sinf(player.angle) * 10;
         DrawLine(playerMapX, playerMapY, dirX, dirY, YELLOW);
         
-        // Instrucciones
-        DrawText("WASD: Mover/Girar", 10, SCREEN_HEIGHT - 30, 20, WHITE);
+        // Instrucciones y estado del juego
+        if (!player.hasWon) {
+            DrawText("WASD: Mover/Girar", 10, SCREEN_HEIGHT - 30, 20, WHITE);
+            DrawText("Encuentra el cubo morado!", 10, SCREEN_HEIGHT - 60, 20, YELLOW);
+        } else {
+            // Pantalla de victoria formal
+            ClearBackground(DARKBLUE); // Fondo azul oscuro elegante
+            
+            const char* victoryText = "¡VICTORIA!";
+            int titleFontSize = 60;
+            int titleWidth = MeasureText(victoryText, titleFontSize);
+            DrawText(victoryText, (SCREEN_WIDTH - titleWidth) / 2, 80, titleFontSize, GOLD);
+            
+            // Sombra del titulo para efecto 3D
+            DrawText(victoryText, (SCREEN_WIDTH - titleWidth) / 2 + 3, 83, titleFontSize, DARKGRAY);
+            
+            // Rectangulo decorativo para el area del sprite
+            int spriteBoxX = SCREEN_WIDTH / 2 - 100;
+            int spriteBoxY = 180;
+            int spriteBoxWidth = 200;
+            int spriteBoxHeight = 200;
+            
+            DrawRectangle(spriteBoxX - 5, spriteBoxY - 5, spriteBoxWidth + 10, spriteBoxHeight + 10, GOLD);
+            DrawRectangle(spriteBoxX, spriteBoxY, spriteBoxWidth, spriteBoxHeight, WHITE);
+            
+            // Texto placeholder para el sprite
+            const char* spriteText = "SPRITE";
+            const char* spriteText2 = "ALGO";
+            const char* spriteText3 = "AQUi";
+            int spriteTextSize = 20;
+            int spriteWidth1 = MeasureText(spriteText, spriteTextSize);
+            int spriteWidth2 = MeasureText(spriteText2, spriteTextSize);
+            int spriteWidth3 = MeasureText(spriteText3, spriteTextSize);
+            
+            DrawText(spriteText, spriteBoxX + (spriteBoxWidth - spriteWidth1) / 2, spriteBoxY + 70, spriteTextSize, GRAY);
+            DrawText(spriteText2, spriteBoxX + (spriteBoxWidth - spriteWidth2) / 2, spriteBoxY + 100, spriteTextSize, RED);
+            DrawText(spriteText3, spriteBoxX + (spriteBoxWidth - spriteWidth3) / 2, spriteBoxY + 130, spriteTextSize, GRAY);
+            
+            // Mensaje de felicitacion
+            const char* congratsText = "¡Felicidades! Has completado el desafio";
+            int congratsSize = 24;
+            int congratsWidth = MeasureText(congratsText, congratsSize);
+            DrawText(congratsText, (SCREEN_WIDTH - congratsWidth) / 2, 420, congratsSize, WHITE);
+            
+            const char* missionText = "Si lees esto, sos un tonto (esto es un placeholder)";
+            int missionSize = 18;
+            int missionWidth = MeasureText(missionText, missionSize);
+            DrawText(missionText, (SCREEN_WIDTH - missionWidth) / 2, 450, missionSize, LIGHTGRAY);
+            
+            static float blinkTimer = 0.0f;
+            blinkTimer += GetFrameTime();
+            
+            if ((int)(blinkTimer * 2) % 2 == 0) { // Parpadea cada 0.5 segundos
+                const char* exitText = "Presiona ENTER para salir";
+                int exitSize = 22;
+                int exitWidth = MeasureText(exitText, exitSize);
+                
+                // Fondo del boton
+                DrawRectangle((SCREEN_WIDTH - exitWidth) / 2 - 20, 500, exitWidth + 40, 40, DARKGREEN);
+                DrawRectangleLines((SCREEN_WIDTH - exitWidth) / 2 - 20, 500, exitWidth + 40, 40, GREEN);
+                
+                DrawText(exitText, (SCREEN_WIDTH - exitWidth) / 2, 510, exitSize, YELLOW);
+            }
+            
+            // Verificar si se presiona ENTER para cerrar el juego
+            if (IsKeyPressed(KEY_ENTER)) {
+                CloseWindow();
+                return 0;
+            }
+        }
         
         EndDrawing();
     }
