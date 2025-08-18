@@ -3,5 +3,5 @@ Proyecto 1 de Graficas de computadora
 
 ## Compilando el programa
 ```
-g++ -o raycaster main.cpp -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
+g++ main.cpp -lraylib -lopengl32 -lgdi32 -lwinmm -o programa
 ```
