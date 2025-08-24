@@ -2,6 +2,7 @@
 #include <cmath>
 #include <vector>
 #include <algorithm>
+#include <cstdio>
 
 const int SCREEN_WIDTH = 800;
 const int SCREEN_HEIGHT = 600;
@@ -19,7 +20,8 @@ enum GameState {
     VICTORY
 };
 
-int worldMap[MAP_HEIGHT][MAP_WIDTH] = {
+// Mapas de los niveles
+int level1Map[MAP_HEIGHT][MAP_WIDTH] = {
     {1,1,1,1,1,1,1,1},
     {1,0,0,0,0,0,0,1},
     {1,0,2,0,0,3,0,1},
@@ -30,6 +32,21 @@ int worldMap[MAP_HEIGHT][MAP_WIDTH] = {
     {1,1,1,1,1,1,1,1}
 };
 
+int level2Map[MAP_HEIGHT][MAP_WIDTH] = {
+    {1,1,1,1,1,1,1,1},
+    {1,0,0,2,2,0,0,1},
+    {1,0,0,0,0,3,0,1},
+    {1,2,3,0,0,0,2,1},
+    {1,0,0,0,4,0,0,1}, // 4 = cubo morado (objetivo)
+    {1,2,0,3,0,3,0,1},
+    {1,0,0,2,2,0,0,1},
+    {1,1,1,1,1,1,1,1}
+};
+
+// Mapa actual en uso
+int worldMap[MAP_HEIGHT][MAP_WIDTH];
+int currentLevel = 1;
+
 struct Player {
     float x, y;        
     float angle;       
@@ -38,7 +55,7 @@ struct Player {
 
 struct Sprite {
     float x, y;
-    int type; // 0 = cubo azul, 1 = cubo verde, 2 = cubo rojo
+    int type; // 0 = cubo azul, 1 = cubo verde, 2 = cubo naranja
     bool active;
     float distance; // Para ordenamiento por profundidad
 };
@@ -58,12 +75,58 @@ float* depthBuffer;
 Sound victorySound;
 Music backgroundMusic;
 
+// Configuraciones de sprites para cada nivel
+std::vector<Sprite> level1Sprites = {
+    {BLOCK_SIZE * 2.5f, BLOCK_SIZE * 2.5f, 0, true, 0}, // Cubo azul
+    {BLOCK_SIZE * 5.5f, BLOCK_SIZE * 5.5f, 1, true, 0}, // Cubo verde
+    {BLOCK_SIZE * 1.5f, BLOCK_SIZE * 6.5f, 2, true, 0}, // Cubo naranja
+    {BLOCK_SIZE * 6.5f, BLOCK_SIZE * 2.5f, 0, true, 0}  // Otro cubo azul
+};
+
+std::vector<Sprite> level2Sprites = {
+    {BLOCK_SIZE * 1.5f, BLOCK_SIZE * 1.5f, 1, true, 0}, // Cubo verde
+    {BLOCK_SIZE * 6.5f, BLOCK_SIZE * 1.5f, 2, true, 0}, // Cubo naranja
+    {BLOCK_SIZE * 2.5f, BLOCK_SIZE * 3.5f, 0, true, 0}, // Cubo azul
+    {BLOCK_SIZE * 5.5f, BLOCK_SIZE * 3.5f, 1, true, 0}, // Cubo verde
+    {BLOCK_SIZE * 1.5f, BLOCK_SIZE * 6.5f, 2, true, 0}, // Cubo naranja
+    {BLOCK_SIZE * 6.5f, BLOCK_SIZE * 6.5f, 0, true, 0}  // Cubo azul
+};
+
+void LoadLevel(int levelNumber, Player& player) {
+    currentLevel = levelNumber;
+    
+    if (levelNumber == 1) {
+        // Copiar mapa del nivel 1
+        for (int y = 0; y < MAP_HEIGHT; y++) {
+            for (int x = 0; x < MAP_WIDTH; x++) {
+                worldMap[y][x] = level1Map[y][x];
+            }
+        }
+        sprites = level1Sprites;
+        player.x = BLOCK_SIZE * 1.5f;
+        player.y = BLOCK_SIZE * 1.5f;
+    } else if (levelNumber == 2) {
+        // Copiar mapa del nivel 2
+        for (int y = 0; y < MAP_HEIGHT; y++) {
+            for (int x = 0; x < MAP_WIDTH; x++) {
+                worldMap[y][x] = level2Map[y][x];
+            }
+        }
+        sprites = level2Sprites;
+        player.x = BLOCK_SIZE * 1.5f;
+        player.y = BLOCK_SIZE * 1.5f;
+    }
+    
+    player.angle = 0.0f;
+    player.hasWon = false;
+}
+
 Color* CreateCubeTexture(Color cubeColor) {
     Color* texture = new Color[SPRITE_SIZE * SPRITE_SIZE];
     
     for (int y = 0; y < SPRITE_SIZE; y++) {
         for (int x = 0; x < SPRITE_SIZE; x++) {
-            // Crear un cubo simple con bordes más oscuros
+            // Crear un cubo simple con bordes mas oscuros
             if (x < 2 || x >= SPRITE_SIZE-2 || y < 2 || y >= SPRITE_SIZE-2) {
                 // Bordes oscuros
                 texture[y * SPRITE_SIZE + x] = {
@@ -195,17 +258,17 @@ void DrawSprite(Player& player, Sprite& sprite, Color* texture) {
 void DrawMenuScreen() {
     ClearBackground(DARKPURPLE);
     
-    //Pantalla de Bienvenida
+    // Pantalla de Bienvenida
     const char* titleText = "RAYCASTER ADVENTURE";
     int titleSize = 48;
     int titleWidth = MeasureText(titleText, titleSize);
-    DrawText(titleText, (SCREEN_WIDTH - titleWidth) / 2 + 3, 83, titleSize, BLACK);
-    DrawText(titleText, (SCREEN_WIDTH - titleWidth) / 2, 80, titleSize, GOLD);
+    DrawText(titleText, (SCREEN_WIDTH - titleWidth) / 2 + 3, 63, titleSize, BLACK);
+    DrawText(titleText, (SCREEN_WIDTH - titleWidth) / 2, 60, titleSize, GOLD);
 
     const char* subtitleText = "¡Bienvenido!";
     int subtitleSize = 32;
     int subtitleWidth = MeasureText(subtitleText, subtitleSize);
-    DrawText(subtitleText, (SCREEN_WIDTH - subtitleWidth) / 2, 150, subtitleSize, WHITE);
+    DrawText(subtitleText, (SCREEN_WIDTH - subtitleWidth) / 2, 130, subtitleSize, WHITE);
     
     const char* descText1 = "Encuentra el cubo morado para ganar";
     const char* descText2 = "Usa WASD para moverte y girar";
@@ -214,49 +277,116 @@ void DrawMenuScreen() {
     int desc1Width = MeasureText(descText1, descSize);
     int desc2Width = MeasureText(descText2, descSize);
     
-    DrawText(descText1, (SCREEN_WIDTH - desc1Width) / 2, 220, descSize, LIGHTGRAY);
-    DrawText(descText2, (SCREEN_WIDTH - desc2Width) / 2, 250, descSize, LIGHTGRAY);
+    DrawText(descText1, (SCREEN_WIDTH - desc1Width) / 2, 180, descSize, LIGHTGRAY);
+    DrawText(descText2, (SCREEN_WIDTH - desc2Width) / 2, 210, descSize, LIGHTGRAY);
     
-    DrawRectangle(150, 320, 30, 30, RED);
-    DrawText("Paredes", 190, 325, 18, WHITE);
+    // Leyenda de elementos
+    DrawRectangle(150, 250, 25, 25, RED);
+    DrawText("Paredes", 185, 255, 16, WHITE);
     
-    DrawRectangle(150, 360, 30, 30, BLUE);
-    DrawText("Decoración", 190, 365, 18, WHITE);
+    DrawRectangle(150, 280, 25, 25, BLUE);
+    DrawText("Decoracion", 185, 285, 16, WHITE);
     
-    DrawRectangle(150, 400, 30, 30, PURPLE);
-    DrawText("¡Objetivo!", 190, 405, 18, WHITE);
+    DrawRectangle(150, 310, 25, 25, PURPLE);
+    DrawText("Objetivo", 185, 315, 16, WHITE);
     
-    DrawRectangle(450, 320, 30, 30, SKYBLUE);
-    DrawText("Sprites", 490, 325, 18, WHITE);
+    DrawRectangle(450, 250, 25, 25, SKYBLUE);
+    DrawText("Sprites", 480, 255, 16, WHITE);
     
-    DrawRectangle(450, 360, 30, 30, LIME);
-    DrawText("Decorativos", 490, 365, 18, WHITE);
+    DrawRectangle(450, 280, 25, 25, LIME);
+    DrawText("Decorativos", 480, 285, 16, WHITE);
     
-    DrawRectangle(450, 400, 30, 30, ORANGE);
-    DrawText("(Cubos 3D)", 490, 405, 18, WHITE);
+    DrawRectangle(450, 310, 25, 25, ORANGE);
+    DrawText("(Cubos 3D)", 480, 315, 16, WHITE);
+    
+    // Selección de nivel
+    const char* levelText = "SELECCIONA NIVEL:";
+    int levelSize = 28;
+    int levelWidth = MeasureText(levelText, levelSize);
+    DrawText(levelText, (SCREEN_WIDTH - levelWidth) / 2, 360, levelSize, YELLOW);
     
     static float blinkTimer = 0.0f;
     blinkTimer += GetFrameTime();
+    bool blink = (int)(blinkTimer * 2) % 2 == 0;
     
-    if ((int)(blinkTimer * 2) % 2 == 0) {
-        const char* startText = "Presiona ENTER para comenzar";
-        int startSize = 24;
-        int startWidth = MeasureText(startText, startSize);
-        
-        DrawRectangle((SCREEN_WIDTH - startWidth) / 2 - 20, 480, startWidth + 40, 40, DARKGREEN);
-        DrawRectangleLines((SCREEN_WIDTH - startWidth) / 2 - 20, 480, startWidth + 40, 40, GREEN);
-        
-        DrawText(startText, (SCREEN_WIDTH - startWidth) / 2, 490, startSize, YELLOW);
-    }
+    // Botón Nivel 1
+    Color level1Color = blink ? DARKGREEN : GREEN;
+    Color level1TextColor = blink ? YELLOW : WHITE;
     
-    const char* creditText = "Proyecto de Gráficas por Computadora";
+    DrawRectangle(200, 420, 150, 50, level1Color);
+    DrawRectangleLines(200, 420, 150, 50, GREEN);
+    
+    const char* level1Text = "1 - NIVEL 1";
+    int level1TextSize = 20;
+    int level1TextWidth = MeasureText(level1Text, level1TextSize);
+    DrawText(level1Text, 200 + (150 - level1TextWidth) / 2, 435, level1TextSize, level1TextColor);
+    
+    // Botón Nivel 2
+    Color level2Color = blink ? DARKBLUE : BLUE;
+    Color level2TextColor = blink ? YELLOW : WHITE;
+    
+    DrawRectangle(450, 420, 150, 50, level2Color);
+    DrawRectangleLines(450, 420, 150, 50, BLUE);
+    
+    const char* level2Text = "2 - NIVEL 2";
+    int level2TextSize = 20;
+    int level2TextWidth = MeasureText(level2Text, level2TextSize);
+    DrawText(level2Text, 450 + (150 - level2TextWidth) / 2, 435, level2TextSize, level2TextColor);
+    
+    // Instrucción de salida
+    const char* exitText = "ESC - Salir del juego";
+    int exitSize = 18;
+    int exitWidth = MeasureText(exitText, exitSize);
+    DrawText(exitText, (SCREEN_WIDTH - exitWidth) / 2, 520, exitSize, LIGHTGRAY);
+    
+    const char* creditText = "Proyecto de Graficas por Computadora";
     int creditSize = 14;
     int creditWidth = MeasureText(creditText, creditSize);
     DrawText(creditText, (SCREEN_WIDTH - creditWidth) / 2, SCREEN_HEIGHT - 30, creditSize, GRAY);
 }
 
+void DrawVictoryScreen(int levelCompleted) {
+    ClearBackground(DARKBLUE);
+    
+    const char* victoryText = "VICTORIA";
+    int titleFontSize = 60;
+    int titleWidth = MeasureText(victoryText, titleFontSize);
+    DrawText(victoryText, (SCREEN_WIDTH - titleWidth) / 2 + 3, 63, titleFontSize, DARKGRAY);
+    DrawText(victoryText, (SCREEN_WIDTH - titleWidth) / 2, 60, titleFontSize, GOLD);
+    
+    char levelText[64];
+    sprintf(levelText, "Nivel %d completado", levelCompleted);
+    int levelSize = 32;
+    int levelWidth = MeasureText(levelText, levelSize);
+    DrawText(levelText, (SCREEN_WIDTH - levelWidth) / 2, 150, levelSize, YELLOW);
+    
+    const char* congratsText = "Felicidades, has completado el desafío";
+    int congratsSize = 24;
+    int congratsWidth = MeasureText(congratsText, congratsSize);
+    DrawText(congratsText, (SCREEN_WIDTH - congratsWidth) / 2, 220, congratsSize, WHITE);
+    
+    const char* missionText = "Objetivo cumplido, has encontrado el cubo morado";
+    int missionSize = 18;
+    int missionWidth = MeasureText(missionText, missionSize);
+    DrawText(missionText, (SCREEN_WIDTH - missionWidth) / 2, 250, missionSize, LIGHTGRAY);
+    
+    static float blinkTimer = 0.0f;
+    blinkTimer += GetFrameTime();
+    
+    if ((int)(blinkTimer * 2) % 2 == 0) {
+        const char* menuText = "Presiona ENTER para volver al menu";
+        int menuSize = 22;
+        int menuWidth = MeasureText(menuText, menuSize);
+        
+        DrawRectangle((SCREEN_WIDTH - menuWidth) / 2 - 20, 320, menuWidth + 40, 40, DARKGREEN);
+        DrawRectangleLines((SCREEN_WIDTH - menuWidth) / 2 - 20, 320, menuWidth + 40, 40, GREEN);
+        
+        DrawText(menuText, (SCREEN_WIDTH - menuWidth) / 2, 330, menuSize, YELLOW);
+    }
+}
+
 int main() {
-    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Raycaster con Sprites y Audio");
+    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Raycaster con Niveles");
     SetTargetFPS(60);
     
     // Inicializar audio
@@ -282,12 +412,6 @@ int main() {
     spriteTextures[1] = CreateCubeTexture(LIME);      // Cubo verde
     spriteTextures[2] = CreateCubeTexture(ORANGE);    // Cubo naranja
     
-    // Inicializar sprites
-    sprites.push_back({BLOCK_SIZE * 2.5f, BLOCK_SIZE * 2.5f, 0, true, 0}); // Cubo azul
-    sprites.push_back({BLOCK_SIZE * 5.5f, BLOCK_SIZE * 5.5f, 1, true, 0}); // Cubo verde
-    sprites.push_back({BLOCK_SIZE * 1.5f, BLOCK_SIZE * 6.5f, 2, true, 0}); // Cubo naranja
-    sprites.push_back({BLOCK_SIZE * 6.5f, BLOCK_SIZE * 2.5f, 0, true, 0}); // Otro cubo azul
-    
     Player player = {BLOCK_SIZE * 4, BLOCK_SIZE * 4, 0.0f, false};
     GameState gameState = MENU;
     
@@ -303,8 +427,19 @@ int main() {
             case MENU:
                 DrawMenuScreen();
                 
-                if (IsKeyPressed(KEY_ENTER)) {
+                // Selección de nivel
+                if (IsKeyPressed(KEY_ONE)) {
+                    LoadLevel(1, player);
                     gameState = PLAYING;
+                }
+                if (IsKeyPressed(KEY_TWO)) {
+                    LoadLevel(2, player);
+                    gameState = PLAYING;
+                }
+                
+                if (IsKeyPressed(KEY_ESCAPE)) {
+                    CloseWindow();
+                    return 0;
                 }
                 break;
                 
@@ -457,51 +592,21 @@ int main() {
                 int dirY = playerMapY + sinf(player.angle) * 10;
                 DrawLine(playerMapX, playerMapY, dirX, dirY, YELLOW);
                 
-                // Instrucciones
-                DrawText("WASD: Mover/Girar", 10, SCREEN_HEIGHT - 30, 20, WHITE);
-                DrawText("Encuentra el cubo morado!", 10, SCREEN_HEIGHT - 60, 20, YELLOW);
-                DrawText("Sprites: Cubos decorativos", 10, SCREEN_HEIGHT - 90, 20, LIGHTGRAY);
+                // Instrucciones y info del nivel
+                DrawText("WASD: Mover/Girar", 10, SCREEN_HEIGHT - 50, 18, WHITE);
+                DrawText("Encuentra el cubo morado!", 10, SCREEN_HEIGHT - 70, 18, YELLOW);
+                
+                char levelInfo[32];
+                sprintf(levelInfo, "Nivel %d", currentLevel);
+                DrawText(levelInfo, 10, SCREEN_HEIGHT - 90, 18, LIME);
                 break;
             } // Fin del bloque PLAYING
                 
             case VICTORY: {
-                // Pantalla de victoria
-                ClearBackground(DARKBLUE);
-                
-                const char* victoryText = "¡VICTORIA!";
-                int titleFontSize = 60;
-                int titleWidth = MeasureText(victoryText, titleFontSize);
-                DrawText(victoryText, (SCREEN_WIDTH - titleWidth) / 2, 80, titleFontSize, GOLD);
-                
-                DrawText(victoryText, (SCREEN_WIDTH - titleWidth) / 2 + 3, 83, titleFontSize, DARKGRAY);
-                        
-                const char* congratsText = "¡Felicidades! Has completado el desafío";
-                int congratsSize = 24;
-                int congratsWidth = MeasureText(congratsText, congratsSize);
-                DrawText(congratsText, (SCREEN_WIDTH - congratsWidth) / 2, 420, congratsSize, WHITE);
-                
-                const char* missionText = "¡Objetivo cumplido! Has encontrado el cubo morado";
-                int missionSize = 18;
-                int missionWidth = MeasureText(missionText, missionSize);
-                DrawText(missionText, (SCREEN_WIDTH - missionWidth) / 2, 450, missionSize, LIGHTGRAY);
-                
-                static float blinkTimer = 0.0f;
-                blinkTimer += GetFrameTime();
-                
-                if ((int)(blinkTimer * 2) % 2 == 0) {
-                    const char* exitText = "Presiona ENTER para salir";
-                    int exitSize = 22;
-                    int exitWidth = MeasureText(exitText, exitSize);
-                    
-                    DrawRectangle((SCREEN_WIDTH - exitWidth) / 2 - 20, 500, exitWidth + 40, 40, DARKGREEN);
-                    DrawRectangleLines((SCREEN_WIDTH - exitWidth) / 2 - 20, 500, exitWidth + 40, 40, GREEN);
-                    
-                    DrawText(exitText, (SCREEN_WIDTH - exitWidth) / 2, 510, exitSize, YELLOW);
-                }
+                DrawVictoryScreen(currentLevel);
                 
                 if (IsKeyPressed(KEY_ENTER)) {
-                    CloseWindow();
-                    return 0;
+                    gameState = MENU;
                 }
                 break;
             } // Fin del bloque VICTORY
